@@ -102,4 +102,4 @@ It is part of a guided technical assessment conducted with CARVI engineers and i
 
 ## License
 
-[Add license here]
+This project is licensed under the Apache License 2.0.
