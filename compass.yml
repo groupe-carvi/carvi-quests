@@ -1,0 +1,16 @@
+name: carvi-quests
+id: ari:cloud:compass:e489ce12-950f-402e-8d4e-940f40450fe5:component/d3e19302-71bb-4ac1-ba88-53bb212819ec/a034d2fa-23f7-49e8-88bd-63e329f260f5
+description: A simple and fun recruitment-driven game project used to test our new hire on different technical and non technical aspects!
+configVersion: 1
+typeId: SERVICE
+fields:
+  tier: 4
+links:
+  - name: null
+    type: REPOSITORY
+    url: https://github.com/groupe-carvi/carvi-quests
+relationships:
+  DEPENDS_ON: []
+labels:
+  - source:github
+customFields: null
