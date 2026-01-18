@@ -1,0 +1,13 @@
+[package]
+name = "cquests-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cquests-core = { path = "../cquests-core" }
+rand_chacha = "0.9.0"
+rand_core = "0.9.5"
+thiserror = "2"
+
+[dev-dependencies]
+pretty_assertions = "1"

@@ -1,0 +1,7 @@
+[package]
+name = "cquests-gm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+llama-burn = { git = "https://github.com/tracel-ai/models", package = "llama-burn", default-features = false }

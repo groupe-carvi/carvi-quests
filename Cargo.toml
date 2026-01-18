@@ -1,0 +1,19 @@
+[package]
+name = "cquests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+[workspace]
+resolver = "2"
+members = [
+	"crates/cquests-core",
+	"crates/cquests-engine",
+	"crates/cquests-client",
+	"crates/cquests-server", "cquests-llm",
+]
+
+# NOTE: we intentionally do *not* include cquests-gm / cquests-llm yet.
+# They currently depend on heavyweight model crates pulled from git; those are
+# introduced in later phases (Phase 3+) once the foundations are stable.
