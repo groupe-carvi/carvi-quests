@@ -11,9 +11,11 @@ members = [
 	"crates/cquests-core",
 	"crates/cquests-engine",
 	"crates/cquests-client",
-	"crates/cquests-server", "cquests-llm",
+	"crates/cquests-server",
+	"crates/cquests-mcp",
+	"crates/cquests-llm",
 ]
 
-# NOTE: we intentionally do *not* include cquests-gm / cquests-llm yet.
+# NOTE: we intentionally do *not* include cquests-gm yet.
 # They currently depend on heavyweight model crates pulled from git; those are
 # introduced in later phases (Phase 3+) once the foundations are stable.

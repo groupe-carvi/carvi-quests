@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+cquests-core = { path = "../cquests-core" }
+cquests-engine = { path = "../cquests-engine" }
+parking_lot = "0.12.5"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
