@@ -6,6 +6,9 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod items;
+pub mod inventory;
+
 pub type Seed = u64;
 
 macro_rules! id_newtype {
@@ -31,7 +34,6 @@ id_newtype!(SessionId);
 id_newtype!(PlayerId);
 id_newtype!(EntityId);
 id_newtype!(LocationId);
-id_newtype!(ItemId);
 id_newtype!(QuestId);
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -421,3 +423,4 @@ pub fn make_visible_state(state: &WorldState, player_id: PlayerId) -> Option<Vis
         co_located_entities,
     })
 }
+
