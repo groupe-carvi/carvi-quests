@@ -5,7 +5,6 @@ use eframe::egui;
 
 use cquests_core::{PlayerId, SessionId, VisibleState};
 use cquests_gm::GmAgent;
-#[cfg(feature = "burn")]
 use cquests_llm::Backend as LlmBackend;
 use cquests_mcp::McpRouter;
 use cquests_server::{ActionService, AuthContext, InMemoryActionService, JsonFileSessionStore, SessionStore};
@@ -90,7 +89,7 @@ impl eframe::App for ClientApp {
 		self.pump_events();
 
 		egui::TopBottomPanel::top("top").show(ctx, |ui| {
-			ui.heading("CQuests ");
+			ui.heading("CQuests — Local Client (Phase 5)");
 			ui.horizontal(|ui| {
 				ui.label(if self.busy { "GM: thinking…" } else { "GM: idle" });
 				if ui.button("Clear log").clicked() {
@@ -166,20 +165,6 @@ fn main() -> eframe::Result<()> {
 
 	// Worker thread: owns server + router + GM + persistence.
 	std::thread::spawn(move || {
-		// Strict mode: this binary requires the burn backend.
-		#[cfg(not(feature = "burn"))]
-		{
-			let _ = tx_ev.send(UiEvent::Error(
-				"Strict mode is enabled but the burn backend is not compiled (feature 'burn' disabled).\n\
-												Rebuild with --features burn,burn-llama3 and a backend (burn-tch|burn-cuda|burn-vulkan|burn-ndarray)."
-					.into(),
-			));
-			let _ = tx_ev.send(UiEvent::Busy(false));
-			return;
-		}
-
-		#[cfg(feature = "burn")]
-		{
 		let service = InMemoryActionService::new();
 		let store = JsonFileSessionStore::new(InMemoryActionService::default_store_dir());
 
@@ -198,13 +183,28 @@ fn main() -> eframe::Result<()> {
 		let _autosave = service.start_autosave(sid, store.clone(), Duration::from_secs(2));
 
 		let router = McpRouter::new(service.clone());
-		let llm = match LlmBackend::burn_default() {
-			Ok(b) => b,
-			Err(e) => {
-				let _ = tx_ev.send(UiEvent::Error(format!(
-					"LLM burn backend failed to initialize: {e}.\n\
+		let llm = {
+			#[cfg(feature = "burn")]
+			{
+				match LlmBackend::burn_default() {
+					Ok(b) => b,
+					Err(e) => {
+						let _ = tx_ev.send(UiEvent::Error(format!(
+							"LLM burn backend failed to initialize: {e}.\n\
 												Strict mode is enabled: not falling back to mock."
-				)));
+						)));
+						let _ = tx_ev.send(UiEvent::Busy(false));
+						return;
+					}
+				}
+			}
+			#[cfg(not(feature = "burn"))]
+			{
+				let _ = tx_ev.send(UiEvent::Error(
+					"Strict mode is enabled but the burn backend is not compiled (feature 'burn' disabled).\n\
+												Rebuild with --features burn,burn-llama3 and a backend (burn-tch|burn-cuda|burn-vulkan|burn-ndarray)."
+						.into(),
+				));
 				let _ = tx_ev.send(UiEvent::Busy(false));
 				return;
 			}
@@ -253,7 +253,6 @@ fn main() -> eframe::Result<()> {
 					let _ = tx_ev.send(UiEvent::Busy(false));
 				}
 			}
-		}
 		}
 	});
 

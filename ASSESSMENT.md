@@ -1,5 +1,6 @@
-CARVI Quests - Technical Assessment Platform
-===============================================
+# CARVI Quests - Technical Assessment Framework
+
+The project is used internally at **Groupe CARVI** as part of our technical hiring process and evolves over time through candidate contributions.
 
 ## Purpose
 

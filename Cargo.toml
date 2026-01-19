@@ -5,17 +5,54 @@ edition = "2024"
 
 [dependencies]
 
+# UI
+eframe = "0.33.3"
+egui = "0.33.3"
+
+crossbeam-channel = "0.5.15"
+parking_lot = "0.12.5"
+
+# Local crates
+cquests-core.workspace = true
+cquests-server.workspace = true
+cquests-mcp.workspace = true
+cquests-llm.workspace = true
+cquests-gm.workspace = true
+
+serde_json = "1.0.149"
+
+[features]
+default = ["burn","burn-llama3","burn-vulkan"]
+
+# Pass-through features for running with the burn backend.
+burn = ["cquests-llm/burn", "cquests-gm/burn"]
+burn-llama3 = ["cquests-llm/burn-llama3", "cquests-gm/burn-llama3"]
+burn-tch = ["cquests-llm/burn-tch", "cquests-gm/burn-tch"]
+burn-cuda = ["cquests-llm/burn-cuda", "cquests-gm/burn-cuda"]
+burn-vulkan = ["cquests-llm/burn-vulkan", "cquests-gm/burn-vulkan"]
+burn-ndarray = ["cquests-llm/burn-ndarray", "cquests-gm/burn-ndarray"]
+
+# Enable build-time vendoring download of llama-burn artifacts into target/.
+model-download = ["cquests-llm/model-download"]
+
 [workspace]
 resolver = "3"
 members = [
 	"crates/cquests-core",
 	"crates/cquests-engine",
-	"crates/cquests-client",
 	"crates/cquests-server",
 	"crates/cquests-mcp",
 	"crates/cquests-llm",
 	"crates/cquests-gm",
 ]
 
+[workspace.dependencies]
+# Local crates
+cquests-core = { path = "crates/cquests-core" }
+cquests-engine = { path = "crates/cquests-engine" }
+cquests-server = { path = "crates/cquests-server" }
+cquests-mcp = { path = "crates/cquests-mcp" }
+cquests-llm = { path = "crates/cquests-llm" }
+cquests-gm = { path = "crates/cquests-gm" }
 # NOTE: cquests-gm depends only on local crates and uses the mock LLM backend
 # by default, so it's safe to include in the workspace.

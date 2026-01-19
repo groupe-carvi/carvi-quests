@@ -1,6 +1,6 @@
 //! Core, stable contracts for CQuests.
 //!
-//! Phase 1 scope: deterministic world state primitives, actions, events, and
+//! Current state: deterministic world state primitives, actions, events, and
 //! validation-friendly error codes. No networking, no UI.
 
 use serde::{Deserialize, Serialize};
@@ -90,7 +90,7 @@ impl WorldState {
 
 /// Player-specific filtered projection of `WorldState`.
 ///
-/// Phase 1: minimal; later phases can hide fog-of-war, secrets, etc.
+/// TODO: can hide fog-of-war, secrets, etc.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VisibleState {
     pub turn: u64,

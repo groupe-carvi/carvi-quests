@@ -25,6 +25,8 @@ target
 
 /target
 
+/sessions
+
 # Local model artifacts (keep manifest tracked)
 /models/**
 !/models/manifest.toml

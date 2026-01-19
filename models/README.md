@@ -23,3 +23,24 @@ models/
     model.mpk
     tokenizer.model
 ```
+
+## Fixing the error “model.checkpoint not found”
+
+If `models/manifest.toml` points to:
+
+- `models/llama-3.1-8b-instruct/model.mpk`
+- `models/llama-3.1-8b-instruct/tokenizer.model`
+
+then create the folder `models/llama-3.1-8b-instruct/` and place **exactly** those two files there.
+
+The files are published on Hugging Face (Files tab):
+
+- https://huggingface.co/tracel-ai/llama-3.1-8b-instruct-burn/tree/main
+
+## Optional: build-time vendoring (no files under ./models)
+
+If you compile with the Cargo feature `model-download`, the build script for `cquests-llm` can download the artifacts into:
+
+`target/llama-burn/<variant>/` (for example `target/llama-burn/llama3_1_8b_instruct/`).
+
+When the app uses `Backend::burn_default()`, it will prefer that vendored manifest automatically when present.

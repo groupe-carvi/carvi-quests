@@ -8,4 +8,5 @@ cquests-core = { path = "../cquests-core" }
 cquests-engine = { path = "../cquests-engine" }
 parking_lot = "0.12.5"
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 thiserror = "2.0.18"

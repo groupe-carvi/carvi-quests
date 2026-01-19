@@ -8,7 +8,7 @@ fn usage_and_exit() -> ! {
 }
 
 fn main() {
-    // Phase 3 smoke test:
+    // smoke test:
     // - create session
     // - stream output
     // - demonstrate cancellation if requested
@@ -76,6 +76,9 @@ fn main() {
         let mut req = GenerateRequest::new(
             "You are a helpful Game Master. Output NARRATIVE:... or TOOL_CALL: {...}.",
         );
+		req.sampling.temperature = 0.0;
+		req.sampling.top_p = 0.0;
+		req.max_new_tokens = 128;
         req.messages.push(ChatMessage {
             role: ChatRole::User,
             content: prompt,
@@ -115,6 +118,9 @@ fn main() {
         let mut req = GenerateRequest::new(
             "You are a helpful Game Master. Output NARRATIVE:... or TOOL_CALL: {...}.",
         );
+		req.sampling.temperature = 0.0;
+		req.sampling.top_p = 0.0;
+		req.max_new_tokens = 128;
         req.messages.push(ChatMessage {
             role: ChatRole::User,
             content: "Continue the scene. What happens next?".into(),

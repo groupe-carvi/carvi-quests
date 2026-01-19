@@ -2,12 +2,16 @@
 name = "cquests-llm"
 version = "0.1.0"
 edition = "2024"
+build = "build.rs"
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 thiserror = "2.0.18"
 toml = "0.9.8"
+
+# Only used when selecting the burn-tch (LibTorch CPU) backend.
+tch = { version = "0.22.0", optional = true }
 
 # Simple, dependency-light streaming.
 crossbeam-channel = "0.5.15"
@@ -26,7 +30,11 @@ burn = { version = "0.20", default-features = false, optional = true, features =
 default = ["mock"]
 mock = []
 
-# Real backend (Phase 3+): compile only when explicitly enabled.
+# When enabled (together with `burn` + a backend), the build script will download
+# model artifacts into target/llama-burn/<variant>/.
+model-download = []
+
+# Compile only when explicitly enabled.
 #
 # Enable one of the burn-* feature combos below to select a backend.
 burn = ["dep:llama-burn", "dep:burn"]
@@ -35,7 +43,7 @@ burn = ["dep:llama-burn", "dep:burn"]
 burn-llama3 = ["llama-burn/llama3"]
 
 # Backend selection (matches llama-burn feature flags).
-burn-tch = ["llama-burn/tch-cpu", "burn/tch"]
+burn-tch = ["llama-burn/tch-gpu", "burn/tch", "dep:tch"]
 burn-cuda = ["llama-burn/cuda", "burn/cuda"]
 burn-vulkan = ["llama-burn/vulkan", "burn/vulkan"]
 burn-ndarray = ["llama-burn/ndarray", "burn/ndarray"]
@@ -45,3 +53,6 @@ git = "https://github.com/tracel-ai/models"
 package = "llama-burn"
 default-features = false
 optional = true
+
+[build-dependencies]
+ureq = "3.1.4"

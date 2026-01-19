@@ -1,7 +1,5 @@
 //! Deterministic action application engine.
 //!
-//! Phase 1 scope: apply a small set of Actions to `WorldState`, emitting an
-//! append-only canonical `Event` log, with deterministic replay via a seeded RNG.
 
 use cquests_core::{
     Action, ActionFailure, ActionOutcome, ActionResult, DiceExpr, EntityId, ErrorCode, Event,
@@ -41,7 +39,7 @@ impl Engine {
     }
 
     pub fn apply(&mut self, state: &mut WorldState, action: Action) -> ApplyOutcome {
-        // Phase 1: advance turn on every attempted action (success or failure) for clarity.
+        // advance turn on every attempted action (success or failure) for clarity.
         // In later phases, this can be moved to the server scheduling layer.
         state.turn = state.turn.saturating_add(1);
         let mut events = vec![Event::TurnAdvanced { turn: state.turn }];
@@ -172,7 +170,7 @@ fn apply_inspect(
                 .find_entity(target_id)
                 .ok_or_else(|| failure(ErrorCode::NotFound, "target entity not found"))?;
 
-            // Phase 1 rule: can only inspect co-located entities.
+            // only inspect co-located entities. TODO: later phases may allow ranged inspection.
             if target_ent.location != entity.location {
                 return Err(failure(ErrorCode::OutOfRange, "target not in range"));
             }
@@ -224,7 +222,7 @@ fn apply_attack(
         return Err(failure(ErrorCode::NotAlive, "target is not alive"));
     }
 
-    // Phase 1 rule: must be co-located to attack.
+    // only attack co-located entities. TODO: later phases may allow ranged attacks.
     if attacker_ent.location != target_ent.location {
         return Err(failure(ErrorCode::OutOfRange, "target not in range"));
     }
@@ -242,7 +240,7 @@ fn apply_attack(
     let mut defeated = None;
 
     if hit {
-        // Damage: 1d6 (placeholder weapon model for Phase 1)
+        // Damage: 1d6 (placeholder weapon model)
         let dmg_expr = DiceExpr::new(1, 6, 0).expect("static dice");
         damage = roll_dice(&dmg_expr, rng);
         hp_after = (target_ent.hp - damage).max(0);

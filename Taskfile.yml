@@ -1,0 +1,16 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  build:
+    cmds:
+      - cargo build --features "model-download"
+    silent: true
+  run:
+    cmds:
+      - cargo run --features "model-download" --
+    silent: true

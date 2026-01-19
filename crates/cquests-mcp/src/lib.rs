@@ -1,4 +1,4 @@
-//! MCP layer (Phase 2): tools/resources/prompts.
+//! MCP layer : tools/resources/prompts.
 //!
 //! This crate intentionally models MCP concepts in a transport-agnostic way.
 //! A later phase can expose the same router over stdio / websocket / HTTP.
@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+pub mod sdk;
+
 pub const TOOL_GET_VISIBLE_STATE: &str = "get_visible_state";
 pub const TOOL_ROLL: &str = "roll";
 pub const TOOL_MOVE: &str = "move";
 pub const TOOL_INSPECT: &str = "inspect";
 pub const TOOL_ATTACK: &str = "attack";
+pub const TOOL_SEND_TO_PLAYERS: &str = "send_to_players";
 
 pub const PROMPT_GM_TURN: &str = "gm_turn";
 pub const PROMPT_NPC_VOICE: &str = "npc_voice";
@@ -77,6 +80,10 @@ impl<S: ActionService> McpRouter<S> {
                 name: TOOL_ATTACK.into(),
                 description: "Attack a target entity (co-located)".into(),
             },
+			ToolDescriptor {
+				name: TOOL_SEND_TO_PLAYERS.into(),
+				description: "Send an out-of-band text message to players (communication only; no game-state change).".into(),
+			},
         ]
     }
 
@@ -141,13 +148,28 @@ impl<S: ActionService> McpRouter<S> {
                 )?;
                 Ok(serde_json::json!({"result": result, "events": events}))
             }
+			TOOL_SEND_TO_PLAYERS => {
+				let a: SendToPlayersArgs = serde_json::from_value(args)
+					.map_err(|e| McpError::InvalidArguments(e.to_string()))?;
+
+				// transport-agnostic placeholder.
+				// This tool is meant to be wired to a real transport later (websocket, etc.).
+				// For now, return an acknowledgement payload so the GM can continue.
+                Ok(serde_json::json!({
+                    "sent": true,
+                    "session_id": a.session_id,
+                    "to_player_ids": a.to_player_ids,
+                    "broadcast": a.to_player_ids.is_empty(),
+                    "text": a.text,
+                }))
+			}
             other => Err(McpError::UnknownTool(other.into())),
         }
     }
 
     /// Read a resource by URI.
     ///
-    /// Implemented in Phase 2:
+    /// Implemented at this moment:
     /// - `world://lore/overview`
     /// - `session://{session_id}/visible/{player_id}`
     /// - `session://{session_id}/recent_events?limit=N`
@@ -155,7 +177,7 @@ impl<S: ActionService> McpRouter<S> {
         if uri == "world://lore/overview" {
             return Ok(serde_json::json!({
                 "title": "CQuests (placeholder lore)",
-                "text": "A small realm of deterministic adventures. Real lore arrives in Phase 5."
+                "text": "A small realm of deterministic adventures."
             }));
         }
 
@@ -237,11 +259,28 @@ impl<S: ActionService> McpRouter<S> {
     pub fn get_prompt(&self, name: &str) -> McpResult<String> {
         match name {
             PROMPT_GM_TURN => Ok(
-                "You are the Game Master. Output either:\n\
+                "You are the Game Master (GM) for an interactive adventure.\n\
+Stay inventive and adapt to the players' style: match their level of humor, drama, and pace.\n\
+\n\
+Core GM rule (always-a-try): the player can attempt anything in the fiction.\n\
+- Accept the intent in-world and narrate what happens (success, failure, complication, or consequence).\n\
+\n\
+Tone: dark comedy and mature themes are allowed when appropriate, but keep descriptions non-graphic and non-explicit.\n\
+- If players push toward explicit sexual content, do a tasteful fade-to-black / cutaway and continue with aftermath, consequences, and plot momentum.\n\
+- Avoid graphic gore; prefer cinematic, high-level description.\n\
+\n\
+Always try to steer the session back toward the active plot hooks without railroading.\n\
+\n\
+Output either:\n\
 NARRATIVE: ...\n\
 OR\n\
 TOOL_CALL: {\"name\":...,\"arguments\":{...}}\n\
-Never claim outcomes not returned by tools."
+\n\
+Never claim outcomes not returned by tools when a tool is required for the outcome.\n\
+\n\
+Important:\n\
+- Never invent tools. Only call tools that exist in the MCP tool list.\n\
+"
                     .into(),
             ),
             PROMPT_NPC_VOICE => Ok(
@@ -293,6 +332,17 @@ pub struct AttackArgs {
     pub session_id: SessionId,
     pub player_id: PlayerId,
     pub target_id: u64,
+}
+
+/// Communication-only tool.
+///
+/// If `to_player_ids` is empty, the message is treated as a broadcast.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SendToPlayersArgs {
+    pub session_id: SessionId,
+    #[serde(default)]
+    pub to_player_ids: Vec<u64>,
+    pub text: String,
 }
 
 /// Convenience helper for tests.

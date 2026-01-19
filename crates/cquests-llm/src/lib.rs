@@ -1,6 +1,6 @@
 //! LLM wrapper for CQuests.
 //!
-//! Phase 3 goal: provide a stable interface for the GM agent:
+//! Provide a stable interface for the GM agent:
 //! - create sessions (KV-cache-like continuity)
 //! - stream generation (token chunks)
 //! - cancellation
@@ -108,12 +108,16 @@ pub enum TokenEvent {
 
 /// Streaming token receiver.
 ///
-/// Implemented as a channel so we don't force an async runtime in Phase 3.
+/// Implemented as a channel so we don't force an async runtime for now.
 pub struct TokenStream {
 	rx: Receiver<TokenEvent>,
 }
 
 impl TokenStream {
+	pub fn from_receiver(rx: Receiver<TokenEvent>) -> Self {
+		Self { rx }
+	}
+
 	pub fn recv(&self) -> Option<TokenEvent> {
 		self.rx.recv().ok()
 	}
@@ -160,7 +164,7 @@ impl Default for SessionCacheConfig {
 	}
 }
 
-/// Minimal per-session state for Phase 3.
+/// Minimal per-session state.
 #[derive(Clone, Debug)]
 struct SessionState {
 	/// Rolling transcript for the mock backend; for burn backend this is where
@@ -436,6 +440,11 @@ impl Backend {
 	}
 
 	#[cfg(feature = "burn")]
+	pub fn burn_default() -> LlmResult<Self> {
+		Ok(Self::Burn(BurnLlm::from_default_models_dir()?))
+	}
+
+	#[cfg(feature = "burn")]
 	pub fn burn_from_manifest_path(path: &str) -> LlmResult<Self> {
 		Ok(Self::Burn(BurnLlm::from_manifest_path(path)?))
 	}
@@ -495,6 +504,13 @@ pub struct BurnLlm {
 impl BurnLlm {
 	/// Load model config from `models/manifest.toml` (repo-root relative).
 	pub fn from_default_models_dir() -> LlmResult<Self> {
+		// Prefer the build-script generated vendor manifest (target/llama-burn/<variant>/manifest.toml)
+		// when available. This allows vendoring artifacts into target/.
+		if let Some(vendor_manifest) = option_env!("CQUESTS_LLM_VENDOR_MANIFEST") {
+			if std::path::Path::new(vendor_manifest).is_file() {
+				return Self::from_manifest_path(vendor_manifest);
+			}
+		}
 		Self::from_manifest_path("models/manifest.toml")
 	}
 
@@ -504,12 +520,47 @@ impl BurnLlm {
 		let mut manifest: ModelManifest = toml::from_str(&text)
 			.map_err(|e| LlmError::InvalidRequest(format!("invalid manifest: {e}")))?;
 
-		// Resolve relative paths relative to the manifest file location.
-		let base_dir = std::path::Path::new(path)
-			.parent()
-			.unwrap_or(std::path::Path::new("."));
-		manifest.model.checkpoint = resolve_manifest_path(base_dir, &manifest.model.checkpoint);
-		manifest.model.tokenizer = resolve_manifest_path(base_dir, &manifest.model.tokenizer);
+		// Resolve relative paths relative to the repo root (Cargo.toml location).
+		// The default manifest lives under ./models/manifest.toml, and paths inside it
+		// are specified repo-root relative (e.g. "models/..."), so resolving relative to
+		// the manifest directory would incorrectly produce "models/models/...".
+		let manifest_path = std::path::Path::new(path);
+		let manifest_dir = manifest_path.parent().unwrap_or(std::path::Path::new("."));
+		let repo_root = find_repo_root(manifest_dir).unwrap_or(manifest_dir);
+		manifest.model.checkpoint = resolve_manifest_path(repo_root, &manifest.model.checkpoint);
+		manifest.model.tokenizer = resolve_manifest_path(repo_root, &manifest.model.tokenizer);
+
+		// Fail fast with actionable errors if artifacts are missing.
+		if !std::path::Path::new(&manifest.model.checkpoint).exists() {
+			let hint = pretrained_source_url(&manifest.model.variant)
+				.map(|url| {
+					format!(
+						"\n\nHint: download `model.mpk` + `tokenizer.model` from {url} (Files tab),\nthen place them at the paths configured in models/manifest.toml (repo-root relative)."
+					)
+				})
+				.unwrap_or_else(|| {
+					"\n\nHint: ensure the file exists locally, or update models/manifest.toml to point to the correct checkpoint path.".into()
+				});
+			return Err(LlmError::InvalidRequest(format!(
+				"model.checkpoint not found: {}{hint}",
+				manifest.model.checkpoint,
+			)));
+		}
+		if !std::path::Path::new(&manifest.model.tokenizer).exists() {
+			let hint = pretrained_source_url(&manifest.model.variant)
+				.map(|url| {
+					format!(
+						"\n\nHint: download `tokenizer.model` from {url} (Files tab),\nthen place it at the path configured in models/manifest.toml (repo-root relative)."
+					)
+				})
+				.unwrap_or_else(|| {
+					"\n\nHint: ensure the file exists locally, or update models/manifest.toml to point to the correct tokenizer path.".into()
+				});
+			return Err(LlmError::InvalidRequest(format!(
+				"model.tokenizer not found: {}{hint}",
+				manifest.model.tokenizer,
+			)));
+		}
 
 		Ok(Self {
 			next_id: AtomicU64::new(1),
@@ -663,6 +714,17 @@ impl LlmClient for BurnLlm {
 
 // ---- Burn backend helpers (feature gated) ----
 
+// Strict feature requirements for the burn backend.
+// We currently only support Llama-3-family models via llama-burn.
+#[cfg(all(feature = "burn", not(feature = "burn-llama3")))]
+compile_error!("Feature 'burn' requires 'burn-llama3' in this project.");
+
+#[cfg(all(
+	feature = "burn",
+	not(any(feature = "burn-tch", feature = "burn-cuda", feature = "burn-vulkan", feature = "burn-ndarray"))
+))]
+compile_error!("Feature 'burn' requires selecting exactly one backend: burn-tch | burn-cuda | burn-vulkan | burn-ndarray");
+
 // Enforce selecting a single Burn backend.
 #[cfg(all(feature = "burn-tch", feature = "burn-cuda"))]
 compile_error!("Select only one burn backend feature: burn-tch | burn-cuda | burn-vulkan | burn-ndarray");
@@ -676,6 +738,39 @@ compile_error!("Select only one burn backend feature: burn-tch | burn-cuda | bur
 compile_error!("Select only one burn backend feature: burn-tch | burn-cuda | burn-vulkan | burn-ndarray");
 #[cfg(all(feature = "burn-vulkan", feature = "burn-ndarray"))]
 compile_error!("Select only one burn backend feature: burn-tch | burn-cuda | burn-vulkan | burn-ndarray");
+
+#[cfg(all(feature = "burn", feature = "burn-tch"))]
+fn configure_tch_threading_once() {
+	use std::sync::Once;
+	static ONCE: Once = Once::new();
+
+	ONCE.call_once(|| {
+		let available = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+		let intra_threads = std::env::var("CQUESTS_TCH_INTRA_THREADS")
+			.ok()
+			.and_then(|v| v.parse::<usize>().ok())
+			.filter(|&n| n > 0)
+			.unwrap_or(available);
+		let inter_threads = std::env::var("CQUESTS_TCH_INTER_THREADS")
+			.ok()
+			.and_then(|v| v.parse::<usize>().ok())
+			.filter(|&n| n > 0)
+			.unwrap_or(1);
+
+		// Best-effort: configure LibTorch CPU threading to avoid single-thread stalls.
+		tch::set_num_threads(i32::try_from(intra_threads).unwrap_or(i32::MAX));
+		tch::set_num_interop_threads(i32::try_from(inter_threads).unwrap_or(1));
+
+		if std::env::var_os("CQUESTS_LLM_DEBUG").is_some() {
+			eprintln!(
+				"cquests-llm: configured tch threads (intra={intra_threads}, inter={inter_threads}, available={available})"
+			);
+		}
+	});
+}
+
+#[cfg(all(feature = "burn", not(feature = "burn-tch")))]
+fn configure_tch_threading_once() {}
 
 #[cfg(feature = "burn")]
 #[derive(Clone, Debug, Deserialize)]
@@ -727,6 +822,16 @@ fn resolve_manifest_path(base_dir: &std::path::Path, p: &str) -> String {
 }
 
 #[cfg(feature = "burn")]
+fn find_repo_root(start_dir: &std::path::Path) -> Option<&std::path::Path> {
+	for dir in start_dir.ancestors() {
+		if dir.join("Cargo.toml").is_file() {
+			return Some(dir);
+		}
+	}
+	None
+}
+
+#[cfg(feature = "burn")]
 fn default_temp() -> f64 {
 	0.6
 }
@@ -739,6 +844,17 @@ fn default_top_p() -> f64 {
 #[cfg(feature = "burn")]
 fn default_seed() -> u64 {
 	42
+}
+
+#[cfg(feature = "burn")]
+fn pretrained_source_url(variant: &str) -> Option<&'static str> {
+	match variant {
+		"llama3_1_8b_instruct" => Some("https://huggingface.co/tracel-ai/llama-3.1-8b-instruct-burn/tree/main"),
+		"llama3_8b_instruct" => Some("https://huggingface.co/tracel-ai/llama-3-8b-instruct-burn/tree/main"),
+		"llama3_2_1b_instruct" => Some("https://huggingface.co/tracel-ai/llama-3.2-1b-instruct-burn/tree/main"),
+		"llama3_2_3b_instruct" => Some("https://huggingface.co/tracel-ai/llama-3.2-3b-instruct-burn/tree/main"),
+		_ => None,
+	}
 }
 
 #[cfg(feature = "burn")]
@@ -776,7 +892,7 @@ fn format_llama3_instruct_prompt(system_prompt: &str, messages: &[ChatMessage]) 
 				out.push_str("<|eot_id|>");
 			}
 			ChatRole::Tool => {
-				// Phase 3: tools are encoded as assistant messages in the prompt.
+				// Tools are encoded as assistant messages in the prompt.
 				out.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
 				out.push_str(m.content.trim());
 				out.push_str("<|eot_id|>");
@@ -817,28 +933,28 @@ mod burn_backend {
 
 	// One-backend selection is enforced by compile_error! earlier in the file.
 	#[cfg(feature = "burn-tch")]
-	pub type Backend = burn::backend::LibTorch<burn::tensor::f16>;
+	pub type BurnBackend = burn::backend::LibTorch<burn::tensor::f16>;
 	#[cfg(feature = "burn-tch")]
 	pub type DeviceType = burn::backend::libtorch::LibTorchDevice;
 
 	#[cfg(feature = "burn-cuda")]
-	pub type Backend = burn::backend::Cuda<burn::tensor::f16, i32>;
+	pub type BurnBackend = burn::backend::Cuda<burn::tensor::f16, i32>;
 	#[cfg(feature = "burn-cuda")]
 	pub type DeviceType = burn::backend::cuda::CudaDevice;
 
 	#[cfg(feature = "burn-vulkan")]
-	pub type Backend = burn::backend::wgpu::Vulkan<burn::tensor::f16, i32>;
+	pub type BurnBackend = burn::backend::wgpu::Vulkan<burn::tensor::f16, i32>;
 	#[cfg(feature = "burn-vulkan")]
 	pub type DeviceType = burn::backend::wgpu::WgpuDevice;
 
 	#[cfg(feature = "burn-ndarray")]
-	pub type Backend = burn::backend::ndarray::NdArray<f32>;
+	pub type BurnBackend = burn::backend::ndarray::NdArray<f32>;
 	#[cfg(feature = "burn-ndarray")]
 	pub type DeviceType = ();
 
-	pub type LlamaType = Llama<Backend, Tiktoken>;
+	pub type LlamaType = Llama<BurnBackend, Tiktoken>;
 
-	pub fn device() -> Device<Backend> {
+	pub fn device() -> Device<BurnBackend> {
 		#[cfg(feature = "burn-tch")]
 		{
 			return DeviceType::Cpu;
@@ -858,40 +974,32 @@ mod burn_backend {
 	}
 
 	pub fn load(manifest: &ModelManifest) -> Result<LlamaType, String> {
-		#[cfg(not(feature = "burn-llama3"))]
-		{
-			let _ = manifest;
-			return Err("burn backend requires feature burn-llama3".into());
-		}
+		let device = device();
+		let checkpoint = manifest.model.checkpoint.as_str();
+		let tokenizer_path = manifest.model.tokenizer.as_str();
+		let max_seq_len = manifest.model.max_seq_len;
 
-		#[cfg(feature = "burn-llama3")]
-		{
-			let device = device();
-			let checkpoint = manifest.model.checkpoint.as_str();
-			let tokenizer_path = manifest.model.tokenizer.as_str();
-			let max_seq_len = manifest.model.max_seq_len;
-
-			match manifest.model.variant.as_str() {
-				"llama3_1_8b_instruct" => {
-					LlamaConfig::load_llama3_1_8b::<Backend>(checkpoint, tokenizer_path, max_seq_len, &device)
-				}
-				"llama3_8b_instruct" => {
-					LlamaConfig::load_llama3_8b::<Backend>(checkpoint, tokenizer_path, max_seq_len, &device)
-				}
-				"llama3_2_1b_instruct" => {
-					LlamaConfig::load_llama3_2_1b::<Backend>(checkpoint, tokenizer_path, max_seq_len, &device)
-				}
-				"llama3_2_3b_instruct" => {
-					LlamaConfig::load_llama3_2_3b::<Backend>(checkpoint, tokenizer_path, max_seq_len, &device)
-				}
-				other => Err(format!("unknown model.variant: {other}")),
+		match manifest.model.variant.as_str() {
+			"llama3_1_8b_instruct" => {
+				LlamaConfig::load_llama3_1_8b::<BurnBackend>(checkpoint, tokenizer_path, max_seq_len, &device)
 			}
+			"llama3_8b_instruct" => {
+				LlamaConfig::load_llama3_8b::<BurnBackend>(checkpoint, tokenizer_path, max_seq_len, &device)
+			}
+			"llama3_2_1b_instruct" => {
+				LlamaConfig::load_llama3_2_1b::<BurnBackend>(checkpoint, tokenizer_path, max_seq_len, &device)
+			}
+			"llama3_2_3b_instruct" => {
+				LlamaConfig::load_llama3_2_3b::<BurnBackend>(checkpoint, tokenizer_path, max_seq_len, &device)
+			}
+			other => Err(format!("unknown model.variant: {other}")),
 		}
 	}
 }
 
 #[cfg(feature = "burn")]
 fn burn_backend_load_llama(manifest: &ModelManifest) -> Result<BurnLlama, String> {
+	configure_tch_threading_once();
 	burn_backend::load(manifest)
 }
 
@@ -952,11 +1060,13 @@ fn burn_streaming_generate(
 ) -> Result<BurnFinish, String> {
 	use burn::tensor::backend::Backend as BurnBackendTrait;
 	use burn::tensor::{activation::softmax, Int, Shape, Tensor, TensorData};
-	use burn_backend::Backend as B;
+	use burn_backend::BurnBackend as B;
 	use llama_burn::sampling::Sampler;
 	use llama_burn::tokenizer::Tokenizer;
 
 	let llama = sess.llama.as_mut().ok_or("llama not loaded")?;
+	let debug = std::env::var_os("CQUESTS_LLM_DEBUG").is_some();
+	let t0 = Instant::now();
 
 	let temperature = req.sampling.temperature as f64;
 	let top_p = req.sampling.top_p as f64;
@@ -987,7 +1097,17 @@ fn burn_streaming_generate(
 		&llama.device,
 	);
 
+	let prefill_start = Instant::now();
 	let mut logits = llama.model.forward(x_prompt, &mut llama.cache, &llama.rope);
+	if debug {
+		eprintln!(
+			"cquests-llm: prefill done (tokens={}, elapsed={:?})",
+			delta_token_ids.len(),
+			prefill_start.elapsed()
+		);
+	}
+
+	let mut first_chunk_emitted = false;
 
 	// Generate token-by-token.
 	for i in 0..(req.max_new_tokens as usize) {
@@ -1051,6 +1171,10 @@ fn burn_streaming_generate(
 
 		emitted_tokens += 1;
 		if !to_send.is_empty() {
+			if debug && !first_chunk_emitted {
+				first_chunk_emitted = true;
+				eprintln!("cquests-llm: first chunk after {:?}", t0.elapsed());
+			}
 			let _ = tx.send(TokenEvent::TokenChunk { text: to_send });
 		}
 
@@ -1076,7 +1200,7 @@ fn burn_streaming_generate(
 #[cfg(feature = "burn")]
 fn burn_feed_token(llama: &mut BurnLlama, token_id: u32) -> Result<(), String> {
 	use burn::tensor::{Int, Shape, Tensor, TensorData};
-	use burn_backend::Backend as B;
+	use burn_backend::BurnBackend as B;
 
 	let x_next: Tensor<B, 2, Int> = Tensor::from_data(
 		TensorData::new(vec![token_id], Shape::new([1, 1])),
@@ -1089,7 +1213,7 @@ fn burn_feed_token(llama: &mut BurnLlama, token_id: u32) -> Result<(), String> {
 #[cfg(feature = "burn")]
 fn burn_feed_text(llama: &mut BurnLlama, text: &str) -> Result<(), String> {
 	use burn::tensor::{Int, Shape, Tensor, TensorData};
-	use burn_backend::Backend as B;
+	use burn_backend::BurnBackend as B;
 	use llama_burn::tokenizer::Tokenizer;
 
 	let token_ids = llama.tokenizer.encode(text, false, false);
