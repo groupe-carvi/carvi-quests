@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
 	"crates/cquests-core",
 	"crates/cquests-engine",
@@ -14,8 +14,8 @@ members = [
 	"crates/cquests-server",
 	"crates/cquests-mcp",
 	"crates/cquests-llm",
+	"crates/cquests-gm",
 ]
 
-# NOTE: we intentionally do *not* include cquests-gm yet.
-# They currently depend on heavyweight model crates pulled from git; those are
-# introduced in later phases (Phase 3+) once the foundations are stable.
+# NOTE: cquests-gm depends only on local crates and uses the mock LLM backend
+# by default, so it's safe to include in the workspace.

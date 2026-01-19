@@ -24,3 +24,8 @@ target
 # Added by cargo
 
 /target
+
+# Local model artifacts (keep manifest tracked)
+/models/**
+!/models/manifest.toml
+!/models/README.md

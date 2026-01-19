@@ -4,3 +4,44 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "2.0.18"
+toml = "0.9.8"
+
+# Simple, dependency-light streaming.
+crossbeam-channel = "0.5.15"
+
+# Fast mutex for session cache.
+parking_lot = "0.12.5"
+
+# LRU for session state.
+lru = "0.16.3"
+
+# Only needed when compiling the burn backend (we need access to Device/Backend types).
+burn = { version = "0.20", default-features = false, optional = true, features = ["std"] }
+
+[features]
+# Default: always works (no model weights required)
+default = ["mock"]
+mock = []
+
+# Real backend (Phase 3+): compile only when explicitly enabled.
+#
+# Enable one of the burn-* feature combos below to select a backend.
+burn = ["dep:llama-burn", "dep:burn"]
+
+# Model family selection.
+burn-llama3 = ["llama-burn/llama3"]
+
+# Backend selection (matches llama-burn feature flags).
+burn-tch = ["llama-burn/tch-cpu", "burn/tch"]
+burn-cuda = ["llama-burn/cuda", "burn/cuda"]
+burn-vulkan = ["llama-burn/vulkan", "burn/vulkan"]
+burn-ndarray = ["llama-burn/ndarray", "burn/ndarray"]
+
+[dependencies.llama-burn]
+git = "https://github.com/tracel-ai/models"
+package = "llama-burn"
+default-features = false
+optional = true

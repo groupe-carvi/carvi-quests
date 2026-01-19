@@ -1,0 +1,31 @@
+# CQuests local model manifest
+#
+# Put your model artifacts under ./models/ (NOT committed), and point this manifest
+# at the local checkpoint/tokenizer paths.
+#
+# For llama-burn, the prebuilt Burn checkpoint format is typically a .mpk file.
+# The tokenizer is typically tokenizer.model for Llama 3.x.
+#
+# Example sources (Burn checkpoints):
+# - https://huggingface.co/tracel-ai/llama-3.1-8b-instruct-burn
+# - https://huggingface.co/tracel-ai/llama-3-8b-instruct-burn
+
+[model]
+# One of: "llama3_1_8b_instruct", "llama3_8b_instruct", "llama3_2_1b_instruct", "llama3_2_3b_instruct"
+variant = "llama3_1_8b_instruct"
+
+# Paths are relative to repo root by default.
+checkpoint = "models/llama-3.1-8b-instruct/model.mpk"
+tokenizer = "models/llama-3.1-8b-instruct/tokenizer.model"
+
+# Max sequence length (context window). llama-burn warns if you exceed model limits.
+max_seq_len = 4096
+
+[sampling]
+# Default inference settings (can be overridden by callers later)
+temperature = 0.6
+# Top-p is implemented by llama-burn's Sampler.
+top_p = 0.9
+
+# Seed used by top-p sampler.
+seed = 42

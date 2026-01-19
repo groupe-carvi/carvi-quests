@@ -4,4 +4,25 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-llama-burn = { git = "https://github.com/tracel-ai/models", package = "llama-burn", default-features = false }
+
+# Local crates
+cquests-llm = { path = "../cquests-llm" }
+cquests-mcp = { path = "../cquests-mcp" }
+cquests-server = { path = "../cquests-server" }
+cquests-core = { path = "../cquests-core" }
+
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+thiserror = "2.0.18"
+parking_lot = "0.12.5"
+
+[features]
+default = []
+
+# Pass-through features to enable the real burn backend in the smoke binary.
+burn = ["cquests-llm/burn"]
+burn-llama3 = ["cquests-llm/burn-llama3"]
+burn-tch = ["cquests-llm/burn-tch"]
+burn-cuda = ["cquests-llm/burn-cuda"]
+burn-vulkan = ["cquests-llm/burn-vulkan"]
+burn-ndarray = ["cquests-llm/burn-ndarray"]
