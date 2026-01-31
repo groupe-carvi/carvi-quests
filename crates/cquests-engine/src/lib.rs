@@ -3,7 +3,7 @@
 
 use cquests_core::{
     Action, ActionFailure, ActionOutcome, ActionResult, DiceExpr, EntityId, ErrorCode, Event,
-    InspectTarget, LocationId, Seed, WorldState,
+    InspectTarget, Item, Inventory, LocationId, Seed, WorldState,
 };
 use rand_chacha::ChaCha20Rng;
 use rand_core::SeedableRng;
